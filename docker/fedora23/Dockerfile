@@ -32,9 +32,11 @@ FROM fedora:23
 # Package installation
 RUN dnf -y update
 ## Common packages for linux build environment
-RUN dnf install -y clang libstdc++-static python git curl bzip2 unzip which
+RUN dnf install -y clang libstdc++-static python git curl bzip2 unzip which zip tar
 ## Packages for linux desktop version
 RUN dnf install -y ibus-devel glib2-devel qt5-qtbase-devel gtk2-devel libxcb-devel
+## Packages for Android
+RUN dnf install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel jsr-305 ant
 ## Packages for NaCl
 RUN dnf install -y glibc.i686
 ## For emacsian
@@ -48,8 +50,23 @@ USER mozc_builder
 RUN mkdir -p /home/mozc_builder/work
 WORKDIR /home/mozc_builder/work
 
+## Android SDK/NDK
+RUN curl -LO http://dl.google.com/android/repository/android-ndk-r16b-linux-x86_64.zip && unzip android-ndk-r16b-linux-x86_64.zip && rm android-ndk-r16b-linux-x86_64.zip
+ENV ANDROID_NDK_HOME /home/mozc_builder/work/android-ndk-r16b
+ENV ANDROID_HOME /home/mozc_builder/work/android-sdk-linux
+RUN curl -LO http://dl.google.com/android/repository/tools_r25.2.5-linux.zip && unzip -d ${ANDROID_HOME} tools_r25.2.5-linux.zip && rm tools_r25.2.5-linux.zip
+ENV PATH $PATH:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${ANDROID_NDK_HOME}
+RUN echo y | android update sdk --all --force --no-ui --filter android-22
+RUN echo y | android update sdk --all --force --no-ui --filter build-tools-28.0.2
+RUN echo y | android update sdk --all --force --no-ui --filter platform-tool
+RUN mkdir -p ${ANDROID_HOME}/extras/android
+RUN curl -LO https://dl.google.com/dl/android/repository/support_r23.1.1.zip && unzip -d ${ANDROID_HOME}/extras/android support_r23.1.1.zip support/v13/android-support-v13.jar && rm support_r23.1.1.zip
+RUN cd ${ANDROID_HOME}/tools && \
+    curl -L https://sourceforge.net/projects/proguard/files/proguard/6.0/proguard6.0.3.tar.gz | tar xz && \
+    cp proguard/proguard-*.txt proguard6.0.3 && mv proguard proguard.org && mv proguard6.0.3 proguard
+
 ## NaCl SDK
-RUN curl -LO http://storage.googleapis.com/nativeclient-mirror/nacl/nacl_sdk/nacl_sdk.zip && unzip nacl_sdk.zip && rm nacl_sdk.zip
+RUN curl -LO https://github.com/Kagami/nacl_sdk/archive/master.zip && unzip master.zip && mv nacl_sdk-master nacl_sdk && rm master.zip
 RUN cd nacl_sdk && ./naclsdk install pepper_49
 ENV NACL_SDK_ROOT /home/mozc_builder/work/nacl_sdk/pepper_49
 
@@ -58,7 +75,7 @@ RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
 ENV PATH $PATH:/home/mozc_builder/work/depot_tools
 
 # check out Mozc source with submodules
-RUN git clone https://github.com/google/mozc.git -b master --single-branch --recursive
+RUN git clone https://github.com/hidegit/mozc.git -b master --single-branch --recursive
 
 WORKDIR /home/mozc_builder/work/mozc/src
 ENTRYPOINT bash
